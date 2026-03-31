@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "learn_spanish",
+  "project_id": "91bd0689-eb76-4162-b29b-a2a69286830b"
+}
