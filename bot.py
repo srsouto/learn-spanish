@@ -16,6 +16,16 @@ from telegram.constants import ParseMode
 load_dotenv()
 
 
+def ensure_sections():
+    """Load book index into DB on first boot if no sections exist."""
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from setup_db import parse_book_index, load_sections
+    book_index_path = os.getenv("BOOK_INDEX_PATH", "book_index.md")
+    sections = parse_book_index(book_index_path)
+    load_sections(sections)  # no-ops if sections already exist
+
+
 def ensure_pdf():
     """Download the textbook PDF from GitHub Releases if it's not on the volume."""
     pdf_path = os.getenv("PDF_PATH", "data/progress.db")
@@ -159,6 +169,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 def main():
     ensure_pdf()
     db.init_db()
+    ensure_sections()
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", cmd_start))
