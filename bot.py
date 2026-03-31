@@ -144,6 +144,18 @@ def main():
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    async def set_commands(app):
+        await app.bot.set_my_commands([
+            ("start",    "Intro to current section"),
+            ("quiz",     "Get a quiz question"),
+            ("next",     "Advance to the next section"),
+            ("progress", "View your progress and weak areas"),
+            ("page",     "Send a page image — /page 42"),
+            ("goto",     "Jump to a section — /goto 3"),
+            ("help",     "Show all commands"),
+        ])
+
+    app.post_init = set_commands
     log.info("Bot started. Polling...")
     app.run_polling()
 
