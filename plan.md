@@ -124,6 +124,26 @@ The bot uses this to know what to teach and where the answers live.
 
 ---
 
+## Status (as of 2026-03-31)
+
+**Completed:**
+- Full project scaffolded and committed to https://github.com/srsouto/learn-spanish (private)
+- All dependencies installed in `.venv/` (anthropic, python-telegram-bot, pdfplumber, pdf2image, poppler)
+- SQLite database initialized with all 31 sections from `book_index.md`
+- Bot tested and working — `/start`, `/quiz`, `/page <n>`, free-text all confirmed working
+- Telegram bot token and chat ID configured in `.env`
+
+**Not yet done:**
+- Cron job setup (for proactive scheduled messages via `scheduler.py`)
+- Cloud deployment (Dockerfile is ready, just needs a host — Railway/Render recommended)
+- Fine-tuning of answer key page ranges in `book_index.md` (rough estimates used, could be tightened)
+- Student profile / weakness tracking not yet exercised (code is there, just needs use)
+
+**To resume:**
+1. `cd /Users/steven/Documents/learn-spanish`
+2. `.venv/bin/python bot.py` — starts the bot
+3. `.venv/bin/python scheduler.py` — test a proactive message manually
+
 ## Verification
 
 - Run `bot.py` locally, message the bot, confirm it responds
