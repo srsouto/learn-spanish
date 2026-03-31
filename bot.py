@@ -6,6 +6,7 @@ Usage:
     python bot.py
 """
 import os
+import asyncio
 import logging
 import urllib.request
 from dotenv import load_dotenv
@@ -162,6 +163,8 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     reply = lm.handle_user_message(user_text)
     await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, lm.update_profile_from_history)
 
 
 # --- Main ---

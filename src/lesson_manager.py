@@ -108,14 +108,16 @@ def handle_user_message(user_text: str) -> str:
 
     reply = llm.chat(history, section_context=section_context, profile_context=profile_context, use_sonnet=use_sonnet)
     db.add_message("assistant", reply)
+    return reply
 
-    # Assess performance from the last exchange and update student profile
-    assessments = llm.assess_performance(history + [{"role": "assistant", "content": reply}])
+
+def update_profile_from_history():
+    """Assess the latest exchange and update student profile. Designed to run in a background thread."""
+    history = db.get_history()
+    assessments = llm.assess_performance(history)
     for a in assessments:
         if isinstance(a, dict) and "topic" in a and "rating" in a:
             db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""))
-
-    return reply
 
 
 def progress_summary() -> str:
