@@ -20,6 +20,24 @@ def get_weak_topics(limit: int = 3) -> list[str]:
     return weak[:limit]
 
 
+def build_profile_context() -> str:
+    """Format student profile as a concise summary for the system prompt."""
+    profile = db.get_profile()
+    if not profile:
+        return ""
+    lines = []
+    strong = [r for r in profile if r["rating"] >= 4]
+    weak = [r for r in profile if r["rating"] <= 2]
+    mid = [r for r in profile if r["rating"] == 3]
+    if strong:
+        lines.append("Strong: " + ", ".join(f"{r['topic']}" for r in strong))
+    if mid:
+        lines.append("Developing: " + ", ".join(f"{r['topic']}" for r in mid))
+    if weak:
+        lines.append("Needs work: " + ", ".join(f"{r['topic']} ({r['notes']})" for r in weak if r["notes"]))
+    return "\n".join(lines)
+
+
 def build_lesson_intro() -> str:
     """Text message: intro to the current section."""
     section = db.get_current_section()
@@ -75,10 +93,11 @@ def pick_proactive_action() -> dict:
 def handle_user_message(user_text: str) -> str:
     """
     Process a free-text message from the user.
-    Adds to history, calls Claude, saves reply.
+    Adds to history, calls Claude, saves reply, then assesses performance.
     """
     section = db.get_current_section()
     section_context = get_section_text(section) if section else ""
+    profile_context = build_profile_context()
 
     db.add_message("user", user_text)
     history = db.get_history()
@@ -87,8 +106,15 @@ def handle_user_message(user_text: str) -> str:
     keywords = ["explain", "why", "how does", "what is", "difference", "grammar"]
     use_sonnet = any(kw in user_text.lower() for kw in keywords)
 
-    reply = llm.chat(history, section_context=section_context, use_sonnet=use_sonnet)
+    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, use_sonnet=use_sonnet)
     db.add_message("assistant", reply)
+
+    # Assess performance from the last exchange and update student profile
+    assessments = llm.assess_performance(history + [{"role": "assistant", "content": reply}])
+    for a in assessments:
+        if isinstance(a, dict) and "topic" in a and "rating" in a:
+            db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""))
+
     return reply
 
 

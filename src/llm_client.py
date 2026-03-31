@@ -3,6 +3,7 @@ Anthropic API wrapper.
 Routes simple interactions to Haiku (cheap/fast) and rich explanations to Sonnet.
 """
 import os
+import json
 import anthropic
 from dotenv import load_dotenv
 
@@ -39,6 +40,7 @@ Formatting rules (Telegram Markdown):
 def chat(
     messages: list[dict],
     section_context: str = "",
+    profile_context: str = "",
     use_sonnet: bool = False,
 ) -> str:
     """
@@ -46,9 +48,12 @@ def chat(
 
     messages: list of {"role": "user"/"assistant", "content": "..."}
     section_context: text extracted from the current textbook section
+    profile_context: summary of student's known strengths and weaknesses
     use_sonnet: True for rich explanations, False (Haiku) for quiz checking / short replies
     """
     system = SYSTEM_PROMPT
+    if profile_context:
+        system += f"\n\nStudent profile (adapt your teaching accordingly):\n{profile_context}"
     if section_context:
         system += (
             f"\n\nThe following is the actual extracted text from the student's current textbook section. "
@@ -82,6 +87,32 @@ def generate_lesson_intro(section_title: str, section_text: str) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
+
+
+def assess_performance(exchange: list[dict]) -> list[dict]:
+    """
+    After a quiz/conversation exchange, extract topic performance ratings.
+    Returns a list of {"topic": str, "rating": int (1-5), "notes": str}.
+    Returns [] if nothing assessable in the exchange.
+    """
+    prompt = (
+        "You are reviewing a Spanish tutoring exchange. "
+        "Identify any Spanish language topics the student demonstrated knowledge or difficulty with. "
+        "Return a JSON array only — no other text. Each item: {\"topic\": str, \"rating\": 1-5, \"notes\": str}. "
+        "Rating: 1-2 = struggled, 3 = partial, 4-5 = strong. "
+        "If no clear performance signal, return []. "
+        "Topics should be specific (e.g. 'definite articles', 'noun gender', 'ser vs estar') not vague.\n\n"
+        "Exchange:\n" + "\n".join(f"{m['role']}: {m['content']}" for m in exchange[-4:])
+    )
+    try:
+        response = _client.messages.create(
+            model=HAIKU,
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return json.loads(response.content[0].text)
+    except Exception:
+        return []
 
 
 def generate_quiz_question(section_text: str, weak_topics: list[str] = None) -> str:
