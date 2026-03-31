@@ -75,10 +75,10 @@ def load_sections(sections: list[dict]):
             ))
         print(f"Loaded {len(sections)} sections into the database.")
 
-    # Set chapter 0 (intro) as the starting section
+    # Start at Chapter 1 (skip the preface — it has no practical Spanish content)
     from src.progress_db import set_state
     with get_connection() as conn:
-        first = conn.execute("SELECT id FROM sections ORDER BY id LIMIT 1").fetchone()
+        first = conn.execute("SELECT id FROM sections WHERE chapter >= 1 ORDER BY id LIMIT 1").fetchone()
         if first:
             conn.execute(
                 "UPDATE sections SET status = 'in_progress' WHERE id = ?", (first["id"],)
