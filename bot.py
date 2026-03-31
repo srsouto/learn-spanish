@@ -33,7 +33,7 @@ def ensure_pdf():
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
     req = urllib.request.Request(
         asset_url,
-        headers={"Authorization": f"token {github_token}", "Accept": "application/octet-stream"},
+        headers={"Authorization": f"Bearer {github_token}", "Accept": "application/octet-stream"},
     )
     with urllib.request.urlopen(req) as resp, open(pdf_path, "wb") as f:
         f.write(resp.read())
