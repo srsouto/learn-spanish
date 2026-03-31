@@ -24,7 +24,12 @@ Your role:
 
 When checking quiz answers: be strict but kind. Always provide the correct answer and a brief tip.
 When explaining grammar: use simple English, give 2-3 examples in Spanish with English translations.
-Keep responses concise — this is a chat interface, not an essay."""
+Keep responses concise — this is a chat interface, not an essay.
+
+Formatting rules (Telegram Markdown):
+- Use *bold* (single asterisk) for emphasis, key terms, and section headers
+- Use plain text for everything else — no bullet point overload
+- Emojis: use sparingly and only when they add genuine clarity or warmth. Never use them as decoration or to pad out a message."""
 
 
 def chat(

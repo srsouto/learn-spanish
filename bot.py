@@ -77,7 +77,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
     intro = lm.build_lesson_intro()
-    await update.message.reply_text(intro)
+    await update.message.reply_text(intro, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +87,7 @@ async def cmd_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if section:
         db.clear_history()
         intro = lm.build_lesson_intro()
-        await update.message.reply_text(f"Moving to Chapter {section['chapter']}: {section['title']}\n\n{intro}")
+        await update.message.reply_text(f"Moving to Chapter {section['chapter']}: {section['title']}\n\n{intro}", parse_mode=ParseMode.MARKDOWN)
     else:
         await update.message.reply_text("You've finished all sections! Great work.")
 
@@ -96,7 +96,7 @@ async def cmd_quiz(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not auth(update):
         return
     question = lm.build_quiz_question()
-    await update.message.reply_text(question)
+    await update.message.reply_text(question, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_progress(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -135,7 +135,7 @@ async def cmd_goto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if section:
         db.clear_history()
         intro = lm.build_lesson_intro()
-        await update.message.reply_text(f"Jumped to Chapter {section['chapter']}: {section['title']}\n\n{intro}")
+        await update.message.reply_text(f"Jumped to Chapter {section['chapter']}: {section['title']}\n\n{intro}", parse_mode=ParseMode.MARKDOWN)
     else:
         await update.message.reply_text("Section not found.")
 
@@ -161,7 +161,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     user_text = update.message.text
     reply = lm.handle_user_message(user_text)
-    await update.message.reply_text(reply)
+    await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
 
 
 # --- Main ---
