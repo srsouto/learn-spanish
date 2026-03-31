@@ -48,7 +48,12 @@ def chat(
     """
     system = SYSTEM_PROMPT
     if section_context:
-        system += f"\n\nCurrent textbook section:\n{section_context}"
+        system += (
+            f"\n\nThe following is the actual extracted text from the student's current textbook section. "
+            f"Use it as your primary source for teaching, quizzes, and answering questions. "
+            f"Do not pretend you lack access to the material — you have it below.\n\n"
+            f"{section_context}"
+        )
 
     model = SONNET if use_sonnet else HAIKU
 
