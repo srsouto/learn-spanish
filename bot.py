@@ -7,12 +7,37 @@ Usage:
 """
 import os
 import logging
+import urllib.request
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 
 load_dotenv()
+
+
+def ensure_pdf():
+    """Download the textbook PDF from GitHub Releases if it's not on the volume."""
+    pdf_path = os.getenv("PDF_PATH", "data/progress.db")
+    asset_url = os.getenv("PDF_ASSET_URL")
+    github_token = os.getenv("GITHUB_TOKEN")
+
+    if os.path.exists(pdf_path):
+        return
+
+    if not asset_url or not github_token:
+        log.warning("PDF not found at %s and PDF_ASSET_URL/GITHUB_TOKEN not set — PDF features will fail.", pdf_path)
+        return
+
+    log.info("PDF not found, downloading from GitHub Releases...")
+    os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+    req = urllib.request.Request(
+        asset_url,
+        headers={"Authorization": f"token {github_token}", "Accept": "application/octet-stream"},
+    )
+    with urllib.request.urlopen(req) as resp, open(pdf_path, "wb") as f:
+        f.write(resp.read())
+    log.info("PDF downloaded to %s", pdf_path)
 
 from src import progress_db as db
 from src import lesson_manager as lm
@@ -132,6 +157,7 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # --- Main ---
 
 def main():
+    ensure_pdf()
     db.init_db()
     app = ApplicationBuilder().token(TOKEN).build()
 
