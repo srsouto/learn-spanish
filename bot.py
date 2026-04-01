@@ -141,12 +141,37 @@ async def cmd_goto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Section not found.")
 
 
+async def cmd_more(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Advance the page window within the current section."""
+    if not auth(update):
+        return
+    section = db.get_current_section()
+    if not section:
+        await update.message.reply_text("No active section. Use /start to begin!")
+        return
+    offset = db.get_section_page_offset(section["id"])
+    section_span = section["page_end"] - section["page_start"]
+    if offset + lm.PAGES_PER_WINDOW > section_span:
+        await update.message.reply_text(
+            "You're at the end of this chapter. Use /next to move on!"
+        )
+        return
+    new_offset = db.advance_section_page(section["id"], lm.PAGES_PER_WINDOW)
+    page_start, page_end = lm.current_page_window(section)
+    intro = lm.build_lesson_intro()
+    await update.message.reply_text(
+        f"Moving to pages {page_start}–{page_end} of this chapter.\n\n{intro}",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not auth(update):
         return
     await update.message.reply_text(
         "/start — intro to current section\n"
         "/next — move to next section\n"
+        "/more — advance to the next pages within the current section\n"
         "/quiz — get a quiz question\n"
         "/progress — see your progress and strengths/weaknesses\n"
         "/page <n> — send a page image from the book\n"
@@ -177,6 +202,7 @@ def main():
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("next", cmd_next))
+    app.add_handler(CommandHandler("more", cmd_more))
     app.add_handler(CommandHandler("quiz", cmd_quiz))
     app.add_handler(CommandHandler("progress", cmd_progress))
     app.add_handler(CommandHandler("page", cmd_page))
@@ -189,6 +215,7 @@ def main():
             ("start",    "Intro to current section"),
             ("quiz",     "Get a quiz question"),
             ("next",     "Advance to the next section"),
+            ("more",     "Move to the next pages within this section"),
             ("progress", "View your progress and weak areas"),
             ("page",     "Send a page image — /page 42"),
             ("goto",     "Jump to a section — /goto 3"),

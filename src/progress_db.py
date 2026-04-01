@@ -310,3 +310,26 @@ def set_state(key: str, value: str):
             INSERT INTO app_state (key, value) VALUES (?, ?)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
         """, (key, value))
+
+
+# --- Page Window (progressive section traversal) ---
+
+def get_section_page_offset(section_id: int) -> int:
+    val = get_state(f"section_{section_id}_page_offset")
+    return int(val) if val else 0
+
+
+def advance_section_page(section_id: int, window_size: int = 3) -> int:
+    """Advance the page window by window_size. Resets interaction counter. Returns new offset."""
+    new_offset = get_section_page_offset(section_id) + window_size
+    set_state(f"section_{section_id}_page_offset", str(new_offset))
+    set_state(f"section_{section_id}_window_interactions", "0")
+    return new_offset
+
+
+def increment_window_interactions(section_id: int) -> int:
+    """Increment assessed-interaction count for the current page window. Returns new count."""
+    key = f"section_{section_id}_window_interactions"
+    count = int(get_state(key) or "0") + 1
+    set_state(key, str(count))
+    return count

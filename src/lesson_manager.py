@@ -7,11 +7,24 @@ from . import pdf_reader
 from . import llm_client as llm
 
 
+PAGES_PER_WINDOW = 3
+INTERACTIONS_BEFORE_ADVANCE = 5
+
+
 def get_section_text(section) -> str:
-    """Extract text for the current section (capped at 3 pages to control tokens)."""
-    page_start = section["page_start"]
-    page_end = min(section["page_end"], page_start + 2)  # max 3 pages at a time
+    """Extract the current page window for this section (3 pages, advances as student progresses)."""
+    offset = db.get_section_page_offset(section["id"])
+    page_start = section["page_start"] + offset
+    page_end = min(section["page_end"], page_start + PAGES_PER_WINDOW - 1)
     return pdf_reader.extract_text(page_start, page_end)
+
+
+def current_page_window(section) -> tuple[int, int]:
+    """Return (page_start, page_end) of the current window."""
+    offset = db.get_section_page_offset(section["id"])
+    page_start = section["page_start"] + offset
+    page_end = min(section["page_end"], page_start + PAGES_PER_WINDOW - 1)
+    return page_start, page_end
 
 
 def get_weak_topics(limit: int = 3) -> list[str]:
@@ -122,6 +135,15 @@ def update_profile_from_history():
     for a in assessments:
         if isinstance(a, dict) and "topic" in a and "rating" in a:
             db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""), section_id=section_id)
+
+    # Auto-advance the page window after enough interactions on the current window
+    if section_id:
+        count = db.increment_window_interactions(section_id)
+        if count >= INTERACTIONS_BEFORE_ADVANCE:
+            offset = db.get_section_page_offset(section_id)
+            section_span = section["page_end"] - section["page_start"]
+            if offset + PAGES_PER_WINDOW <= section_span:
+                db.advance_section_page(section_id, PAGES_PER_WINDOW)
 
 
 def progress_summary() -> str:
