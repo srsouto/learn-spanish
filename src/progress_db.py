@@ -47,6 +47,7 @@ def init_db():
                 rating INTEGER NOT NULL,
                 notes TEXT,
                 section_id INTEGER,
+                page_offset INTEGER,
                 timestamp TEXT NOT NULL
             );
 
@@ -64,6 +65,7 @@ def init_db():
         """)
     _maybe_seed_profile_events()
     _maybe_add_srs_columns()
+    _maybe_add_profile_event_columns()
 
 
 def _maybe_seed_profile_events():
@@ -81,6 +83,14 @@ def _maybe_seed_profile_events():
                 "VALUES (?, ?, ?, NULL, ?)",
                 (row["topic"], row["rating"], row["notes"] or "", row["last_updated"])
             )
+
+
+def _maybe_add_profile_event_columns():
+    """Migration: add page_offset to profile_events if it doesn't exist yet."""
+    with get_connection() as conn:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(profile_events)").fetchall()}
+        if "page_offset" not in existing:
+            conn.execute("ALTER TABLE profile_events ADD COLUMN page_offset INTEGER")
 
 
 def _maybe_add_srs_columns():
@@ -196,13 +206,13 @@ def get_all_sections():
 
 # --- Student Profile ---
 
-def update_topic(topic: str, rating: int, notes: str = "", section_id: int = None):
+def update_topic(topic: str, rating: int, notes: str = "", section_id: int = None, page_offset: int = None):
     now = datetime.utcnow().isoformat()
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO profile_events (topic, rating, notes, section_id, timestamp) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (topic, rating, notes or "", section_id, now)
+            "INSERT INTO profile_events (topic, rating, notes, section_id, page_offset, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (topic, rating, notes or "", section_id, page_offset, now)
         )
         computed_rating, latest_notes = _recompute_topic_rating(conn, topic)
 
@@ -240,6 +250,21 @@ def get_topic_history(topic: str) -> list[dict]:
             (topic,)
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_window_comprehension(section_id: int, page_offset: int) -> dict:
+    """
+    Return assessment stats for topics assessed in the current page window.
+    {"count": int, "avg_rating": float}  — count=0 means nothing assessed yet.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) as count, AVG(rating) as avg_rating "
+            "FROM profile_events "
+            "WHERE section_id = ? AND page_offset = ?",
+            (section_id, page_offset)
+        ).fetchone()
+    return {"count": row["count"] or 0, "avg_rating": row["avg_rating"] or 0.0}
 
 
 def get_due_topics(limit: int = 5) -> list[dict]:

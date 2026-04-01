@@ -8,7 +8,8 @@ from . import llm_client as llm
 
 
 PAGES_PER_WINDOW = 3
-INTERACTIONS_BEFORE_ADVANCE = 5
+MIN_COMPREHENSION_RATING = 3  # avg rating threshold to advance
+FALLBACK_EXCHANGE_LIMIT = 10  # advance anyway after this many exchanges if nothing assessed
 
 
 def get_section_text(section) -> str:
@@ -131,18 +132,22 @@ def update_profile_from_history():
     history = db.get_history()
     section = db.get_current_section()
     section_id = section["id"] if section else None
+    page_offset = db.get_section_page_offset(section_id) if section_id else None
     assessments = llm.assess_performance(history)
     for a in assessments:
         if isinstance(a, dict) and "topic" in a and "rating" in a:
-            db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""), section_id=section_id)
+            db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""), section_id=section_id, page_offset=page_offset)
 
-    # Auto-advance the page window after enough interactions on the current window
+    # Decide whether to advance the page window
     if section_id:
-        count = db.increment_window_interactions(section_id)
-        if count >= INTERACTIONS_BEFORE_ADVANCE:
-            offset = db.get_section_page_offset(section_id)
-            section_span = section["page_end"] - section["page_start"]
-            if offset + PAGES_PER_WINDOW <= section_span:
+        offset = db.get_section_page_offset(section_id)
+        section_span = section["page_end"] - section["page_start"]
+        if offset + PAGES_PER_WINDOW <= section_span:
+            comp = db.get_window_comprehension(section_id, offset)
+            exchange_count = db.increment_window_interactions(section_id)
+            understood = comp["count"] > 0 and comp["avg_rating"] >= MIN_COMPREHENSION_RATING
+            fallback = exchange_count >= FALLBACK_EXCHANGE_LIMIT
+            if understood or fallback:
                 db.advance_section_page(section_id, PAGES_PER_WINDOW)
 
 
