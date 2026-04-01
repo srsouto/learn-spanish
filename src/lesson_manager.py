@@ -20,6 +20,15 @@ def get_section_text(section) -> str:
     return pdf_reader.extract_text(page_start, page_end)
 
 
+def get_answer_key_text(section) -> str:
+    """Extract answer key text for the current section, if available."""
+    start = section["answer_page_start"]
+    end = section["answer_page_end"]
+    if not start or not end:
+        return ""
+    return pdf_reader.extract_text(start, end)
+
+
 def current_page_window(section) -> tuple[int, int]:
     """Return (page_start, page_end) of the current window."""
     offset = db.get_section_page_offset(section["id"])
@@ -73,7 +82,8 @@ def build_quiz_question() -> str:
         return "No active section. Use /start to begin!"
     text = get_section_text(section)
     weak = get_weak_topics()
-    return llm.generate_quiz_question(text, weak)
+    answer_key = get_answer_key_text(section)
+    return llm.generate_quiz_question(text, weak, answer_key=answer_key)
 
 
 def pick_proactive_action() -> dict:
@@ -126,6 +136,7 @@ def handle_user_message(user_text: str) -> str:
     section_context = get_section_text(section) if section else ""
     profile_context = build_profile_context()
     long_term_context = db.get_long_term_context()
+    answer_key_context = get_answer_key_text(section) if section else ""
 
     db.add_message("user", user_text)
     history = db.get_history()
@@ -134,7 +145,7 @@ def handle_user_message(user_text: str) -> str:
     keywords = ["explain", "why", "how does", "what is", "difference", "grammar"]
     use_sonnet = any(kw in user_text.lower() for kw in keywords)
 
-    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, long_term_context=long_term_context, use_sonnet=use_sonnet)
+    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, long_term_context=long_term_context, answer_key_context=answer_key_context, use_sonnet=use_sonnet)
     db.add_message("assistant", reply)
     return reply
 

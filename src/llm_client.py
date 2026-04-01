@@ -42,6 +42,7 @@ def chat(
     section_context: str = "",
     profile_context: str = "",
     long_term_context: str = "",
+    answer_key_context: str = "",
     use_sonnet: bool = False,
 ) -> str:
     """
@@ -63,6 +64,13 @@ def chat(
             f"Use it as your primary source for teaching, quizzes, and answering questions. "
             f"Do not pretend you lack access to the material — you have it below.\n\n"
             f"{section_context}"
+        )
+    if answer_key_context:
+        system += (
+            f"\n\nThe following is the official answer key for this section from the textbook. "
+            f"Use it as the authoritative source when checking the student's quiz answers. "
+            f"When an answer matches the key, confirm it clearly. When it doesn't, give the correct answer from the key.\n\n"
+            f"{answer_key_context}"
         )
 
     model = SONNET if use_sonnet else HAIKU
@@ -149,15 +157,20 @@ def assess_performance(exchange: list[dict]) -> list[dict]:
         return []
 
 
-def generate_quiz_question(section_text: str, weak_topics: list[str] = None) -> str:
+def generate_quiz_question(section_text: str, weak_topics: list[str] = None, answer_key: str = "") -> str:
     """Generate a single quiz question from the current section."""
     focus = ""
     if weak_topics:
         focus = f"Focus on these areas where the student needs practice: {', '.join(weak_topics)}."
 
+    answer_key_note = ""
+    if answer_key:
+        answer_key_note = f"\n\nAnswer key for this section (use to pick questions with known correct answers):\n{answer_key[:1500]}"
+
     prompt = (
         f"Generate one quiz question based on this textbook section. {focus} "
         f"Ask it naturally, as if in conversation. Do not include the answer.\n\n{section_text[:3000]}"
+        f"{answer_key_note}"
     )
     response = _client.messages.create(
         model=HAIKU,

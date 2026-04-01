@@ -26,7 +26,7 @@
 
 ## 3: Hay, Interrogative Words, Days, and Months
 - content: 48-60
-- answers: 587-587
+- answers: 586-587
 
 ## 4: Numbers, Dates, and Time
 - content: 61-76
@@ -38,7 +38,7 @@
 
 ## 6: Irregular Verbs
 - content: 91-102
-- answers: 588-589
+- answers: 588-588
 
 # ── Part II: Objects, Reflexive Verbs, and the Present Subjunctive ────────────
 
@@ -88,7 +88,7 @@
 
 ## 17: Ser and Estar in the Preterit and Imperfect Tenses
 - content: 326-345
-- answers: 600-601
+- answers: 600-600
 
 ## 18: The Present Progressive Tense
 - content: 346-362
@@ -124,7 +124,7 @@
 
 ## 25: The Future Tense
 - content: 486-503
-- answers: 606-607
+- answers: 606-606
 
 ## 26: The Conditional Tense
 - content: 504-518
