@@ -43,7 +43,6 @@ def chat(
     profile_context: str = "",
     long_term_context: str = "",
     answer_key_context: str = "",
-    use_sonnet: bool = False,
 ) -> str:
     """
     Send a conversation to Claude and return the assistant's reply.
@@ -51,7 +50,6 @@ def chat(
     messages: list of {"role": "user"/"assistant", "content": "..."}
     section_context: text extracted from the current textbook section
     profile_context: summary of student's known strengths and weaknesses
-    use_sonnet: True for rich explanations, False (Haiku) for quiz checking / short replies
     """
     system = SYSTEM_PROMPT
     if long_term_context:
@@ -73,7 +71,7 @@ def chat(
             f"{answer_key_context}"
         )
 
-    model = SONNET if use_sonnet else HAIKU
+    model = SONNET
 
     response = _client.messages.create(
         model=model,

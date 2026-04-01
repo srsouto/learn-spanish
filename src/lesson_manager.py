@@ -141,11 +141,7 @@ def handle_user_message(user_text: str) -> str:
     db.add_message("user", user_text)
     history = db.get_history()
 
-    # Use Sonnet if the user seems to want a detailed explanation
-    keywords = ["explain", "why", "how does", "what is", "difference", "grammar"]
-    use_sonnet = any(kw in user_text.lower() for kw in keywords)
-
-    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, long_term_context=long_term_context, answer_key_context=answer_key_context, use_sonnet=use_sonnet)
+    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, long_term_context=long_term_context, answer_key_context=answer_key_context)
     db.add_message("assistant", reply)
     return reply
 
