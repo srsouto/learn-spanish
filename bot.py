@@ -86,7 +86,7 @@ async def cmd_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     section = db.advance_section()
     if section:
-        db.clear_history()
+        lm.summarize_and_clear_history()
         intro = lm.build_lesson_intro()
         await update.message.reply_text(f"Moving to Chapter {section['chapter']}: {section['title']}\n\n{intro}", parse_mode=ParseMode.MARKDOWN)
     else:
@@ -134,7 +134,7 @@ async def cmd_goto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     section = db.go_to_section(int(args[0]))
     if section:
-        db.clear_history()
+        lm.summarize_and_clear_history()
         intro = lm.build_lesson_intro()
         await update.message.reply_text(f"Jumped to Chapter {section['chapter']}: {section['title']}\n\n{intro}", parse_mode=ParseMode.MARKDOWN)
     else:

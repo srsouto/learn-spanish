@@ -41,6 +41,7 @@ def chat(
     messages: list[dict],
     section_context: str = "",
     profile_context: str = "",
+    long_term_context: str = "",
     use_sonnet: bool = False,
 ) -> str:
     """
@@ -52,6 +53,8 @@ def chat(
     use_sonnet: True for rich explanations, False (Haiku) for quiz checking / short replies
     """
     system = SYSTEM_PROMPT
+    if long_term_context:
+        system += f"\n\nLearning history across previous sections (use this to personalise teaching and avoid repeating known struggles):\n{long_term_context}"
     if profile_context:
         system += f"\n\nStudent profile (adapt your teaching accordingly):\n{profile_context}"
     if section_context:
@@ -87,6 +90,37 @@ def generate_lesson_intro(section_title: str, section_text: str) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
+
+
+def summarize_section_learning(section_title: str, history: list[dict], existing_summary: str) -> str:
+    """
+    Compress a section's conversation history into a rolling long-term summary.
+    Merges with the existing summary, keeping total under ~300 words.
+    """
+    if not history:
+        return existing_summary
+    prompt = (
+        f"You are tracking a Spanish student's learning progress across chapters. "
+        f"Below is their conversation history from the section '{section_title}', "
+        f"followed by any existing summary from previous sections.\n\n"
+        f"Write a concise update (max 300 words total) that:\n"
+        f"- Notes topics they showed strength in\n"
+        f"- Notes topics they struggled with or made errors on\n"
+        f"- Captures recurring patterns or mistakes worth remembering\n"
+        f"Merge this with the existing summary. Drop outdated or redundant entries.\n\n"
+        f"Existing summary:\n{existing_summary or 'None yet.'}\n\n"
+        f"Section '{section_title}' conversation:\n"
+        + "\n".join(f"{m['role']}: {m['content']}" for m in history)
+    )
+    try:
+        response = _client.messages.create(
+            model=HAIKU,
+            max_tokens=450,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+    except Exception:
+        return existing_summary
 
 
 def assess_performance(exchange: list[dict]) -> list[dict]:

@@ -337,6 +337,16 @@ def set_state(key: str, value: str):
         """, (key, value))
 
 
+# --- Long-term Context ---
+
+def get_long_term_context() -> str:
+    return get_state("long_term_context") or ""
+
+
+def set_long_term_context(summary: str):
+    set_state("long_term_context", summary)
+
+
 # --- Page Window (progressive section traversal) ---
 
 def get_section_page_offset(section_id: int) -> int:

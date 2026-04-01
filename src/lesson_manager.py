@@ -106,6 +106,17 @@ def pick_proactive_action() -> dict:
     return {"type": "image", "page": page}
 
 
+def summarize_and_clear_history():
+    """Compress current history into the long-term summary, then clear it. Call before section changes."""
+    section = db.get_current_section()
+    history = db.get_history()
+    if history and section:
+        existing = db.get_long_term_context()
+        updated = llm.summarize_section_learning(section["title"], history, existing)
+        db.set_long_term_context(updated)
+    db.clear_history()
+
+
 def handle_user_message(user_text: str) -> str:
     """
     Process a free-text message from the user.
@@ -114,6 +125,7 @@ def handle_user_message(user_text: str) -> str:
     section = db.get_current_section()
     section_context = get_section_text(section) if section else ""
     profile_context = build_profile_context()
+    long_term_context = db.get_long_term_context()
 
     db.add_message("user", user_text)
     history = db.get_history()
@@ -122,7 +134,7 @@ def handle_user_message(user_text: str) -> str:
     keywords = ["explain", "why", "how does", "what is", "difference", "grammar"]
     use_sonnet = any(kw in user_text.lower() for kw in keywords)
 
-    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, use_sonnet=use_sonnet)
+    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, long_term_context=long_term_context, use_sonnet=use_sonnet)
     db.add_message("assistant", reply)
     return reply
 
