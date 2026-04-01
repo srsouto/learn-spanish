@@ -86,16 +86,29 @@ def build_quiz_question() -> str:
     return llm.generate_quiz_question(text, weak, answer_key=answer_key)
 
 
+_SNOOZE_PHRASES = {
+    "later", "not now", "busy", "snooze", "stop", "not today",
+    "maybe later", "not right now", "leave me alone", "pause",
+}
+
+
 def pick_proactive_action() -> dict:
     """
     Decide what to proactively send. Returns a dict:
       {"type": "text" | "image" | "quiz", "content": ..., "page": ...}
+      {"type": "skip"} if snoozed or last message unacknowledged.
 
     Priority:
-      1. SRS topics due for review → quiz targeting the most overdue topic
-      2. Section intro not yet sent → lesson intro
-      3. Otherwise → page image for passive reinforcement
+      1. Snoozed or unacknowledged → skip
+      2. SRS topics due for review → quiz targeting the most overdue topic
+      3. Section intro not yet sent → lesson intro
+      4. Otherwise → page image for passive reinforcement
     """
+    if db.is_snoozed():
+        return {"type": "skip"}
+    if not db.proactive_was_acknowledged():
+        return {"type": "skip"}
+
     section = db.get_current_section()
     if not section:
         return {"type": "text", "content": "Ready to start? Send /start to begin your Spanish journey!"}
@@ -132,6 +145,13 @@ def handle_user_message(user_text: str) -> str:
     Process a free-text message from the user.
     Adds to history, calls Claude, saves reply, then assesses performance.
     """
+    db.record_user_interaction()
+
+    # Snooze proactive messages if the user signals they're busy
+    if any(phrase in user_text.lower() for phrase in _SNOOZE_PHRASES):
+        db.set_snooze(hours=2.0)
+        return "No problem! I'll leave you alone for a couple of hours. Send me a message whenever you're ready."
+
     section = db.get_current_section()
     section_context = get_section_text(section) if section else ""
     profile_context = build_profile_context()

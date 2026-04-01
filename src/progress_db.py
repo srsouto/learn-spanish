@@ -337,6 +337,44 @@ def set_state(key: str, value: str):
         """, (key, value))
 
 
+# --- Proactive Message Scheduling ---
+
+def record_proactive_sent():
+    """Mark that a proactive message was just sent."""
+    set_state("last_proactive_sent_at", datetime.utcnow().isoformat())
+
+
+def record_user_interaction():
+    """Mark that the user just sent a message."""
+    set_state("last_user_interaction_at", datetime.utcnow().isoformat())
+
+
+def proactive_was_acknowledged() -> bool:
+    """True if the user responded after the last proactive message was sent."""
+    sent = get_state("last_proactive_sent_at")
+    interacted = get_state("last_user_interaction_at")
+    if not sent:
+        return True  # No proactive sent yet — nothing to acknowledge
+    if not interacted:
+        return False  # Never interacted
+    return interacted >= sent
+
+
+def set_snooze(hours: float = 2.0):
+    """Snooze proactive messages for the given number of hours."""
+    from datetime import timedelta
+    until = (datetime.utcnow() + timedelta(hours=hours)).isoformat()
+    set_state("snooze_until", until)
+
+
+def is_snoozed() -> bool:
+    """True if proactive messages are currently snoozed."""
+    until = get_state("snooze_until")
+    if not until:
+        return False
+    return datetime.utcnow().isoformat() < until
+
+
 # --- Long-term Context ---
 
 def get_long_term_context() -> str:

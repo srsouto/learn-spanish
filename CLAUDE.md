@@ -87,7 +87,7 @@ Telegram bot that teaches Spanish via "Complete Spanish Step-by-Step" (PDF, 621 
 - **Volume:** mounted at `/data/` — holds `progress.db` and the PDF
 - **PDF:** auto-downloads from GitHub Release asset on startup (env vars: `PDF_ASSET_URL`, `GITHUB_TOKEN`)
 - **CI:** GitHub Actions builds versioned Docker image to ghcr.io on every push to main
-- **Cron:** NOT YET SET UP — see `learn-spanish-47v` — scheduler.py needs a Railway cron service
+- **Cron:** Separate Railway service using the same Docker image. Start command: `python scheduler.py`. Type: Cron. Schedule: `0 9,18 * * *` (9am + 6pm UTC). Must share the same `/data` volume and env vars as the bot service. See `railway.toml` for full setup notes.
 
 ## Key Environment Variables
 

@@ -32,6 +32,10 @@ async def send_proactive():
     bot = Bot(token=TOKEN)
     action = lm.pick_proactive_action()
 
+    if action["type"] == "skip":
+        log.info("Skipping proactive send (snoozed or last message unacknowledged).")
+        return
+
     if action["type"] == "image":
         page = action["page"]
         log.info(f"Sending page image: page {page}")
@@ -44,6 +48,8 @@ async def send_proactive():
     else:
         log.info(f"Sending {action['type']} message")
         await bot.send_message(chat_id=CHAT_ID, text=action["content"])
+
+    db.record_proactive_sent()
 
 
 if __name__ == "__main__":
