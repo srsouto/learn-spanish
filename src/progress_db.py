@@ -63,6 +63,7 @@ def init_db():
             );
         """)
     _maybe_seed_profile_events()
+    _maybe_add_srs_columns()
 
 
 def _maybe_seed_profile_events():
@@ -80,6 +81,40 @@ def _maybe_seed_profile_events():
                 "VALUES (?, ?, ?, NULL, ?)",
                 (row["topic"], row["rating"], row["notes"] or "", row["last_updated"])
             )
+
+
+def _maybe_add_srs_columns():
+    """Migration: add SRS columns to student_profile if they don't exist yet."""
+    with get_connection() as conn:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(student_profile)").fetchall()}
+        for col, ddl in [
+            ("ease_factor",    "ALTER TABLE student_profile ADD COLUMN ease_factor REAL DEFAULT 2.5"),
+            ("interval_days",  "ALTER TABLE student_profile ADD COLUMN interval_days REAL DEFAULT 1.0"),
+            ("next_review_at", "ALTER TABLE student_profile ADD COLUMN next_review_at TEXT"),
+            ("review_count",   "ALTER TABLE student_profile ADD COLUMN review_count INTEGER DEFAULT 0"),
+        ]:
+            if col not in existing:
+                conn.execute(ddl)
+
+
+def _compute_srs(ease_factor: float, interval_days: float, review_count: int, rating: int) -> tuple:
+    """SM-2 inspired SRS update. rating 1-5; returns (ease_factor, interval_days, next_review_at, review_count)."""
+    from datetime import timedelta
+    if rating <= 2:
+        new_interval = 1.0
+        new_ease = max(1.3, ease_factor - 0.2)
+        new_count = 0
+    else:
+        if review_count == 0:
+            new_interval = 1.0
+        elif review_count == 1:
+            new_interval = 6.0
+        else:
+            new_interval = round(interval_days * ease_factor, 1)
+        new_ease = max(1.3, ease_factor + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02)))
+        new_count = review_count + 1
+    next_review = (datetime.utcnow() + timedelta(days=new_interval)).isoformat()
+    return new_ease, new_interval, next_review, new_count
 
 
 _RATING_HALF_LIFE_DAYS = 21.0
@@ -170,14 +205,30 @@ def update_topic(topic: str, rating: int, notes: str = "", section_id: int = Non
             (topic, rating, notes or "", section_id, now)
         )
         computed_rating, latest_notes = _recompute_topic_rating(conn, topic)
+
+        # Fetch current SRS state (or defaults for new topics)
+        row = conn.execute(
+            "SELECT ease_factor, interval_days, review_count FROM student_profile WHERE topic = ?",
+            (topic,)
+        ).fetchone()
+        if row:
+            ef, iv, rc = row["ease_factor"] or 2.5, row["interval_days"] or 1.0, row["review_count"] or 0
+        else:
+            ef, iv, rc = 2.5, 1.0, 0
+        new_ef, new_iv, next_review, new_rc = _compute_srs(ef, iv, rc, rating)
+
         conn.execute("""
-            INSERT INTO student_profile (topic, rating, notes, last_updated)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO student_profile (topic, rating, notes, last_updated, ease_factor, interval_days, next_review_at, review_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(topic) DO UPDATE SET
                 rating = excluded.rating,
                 notes = excluded.notes,
-                last_updated = excluded.last_updated
-        """, (topic, computed_rating, notes or latest_notes, now))
+                last_updated = excluded.last_updated,
+                ease_factor = excluded.ease_factor,
+                interval_days = excluded.interval_days,
+                next_review_at = excluded.next_review_at,
+                review_count = excluded.review_count
+        """, (topic, computed_rating, notes or latest_notes, now, new_ef, new_iv, next_review, new_rc))
 
 
 def get_topic_history(topic: str) -> list[dict]:
@@ -187,6 +238,20 @@ def get_topic_history(topic: str) -> list[dict]:
             "SELECT rating, notes, section_id, timestamp FROM profile_events "
             "WHERE topic = ? ORDER BY timestamp DESC",
             (topic,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_due_topics(limit: int = 5) -> list[dict]:
+    """Topics where next_review_at is past or NULL (never reviewed), ordered by most overdue first."""
+    now = datetime.utcnow().isoformat()
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT topic, rating, next_review_at, interval_days FROM student_profile "
+            "WHERE next_review_at IS NULL OR next_review_at <= ? "
+            "ORDER BY next_review_at ASC "
+            "LIMIT ?",
+            (now, limit)
         ).fetchall()
     return [dict(row) for row in rows]
 

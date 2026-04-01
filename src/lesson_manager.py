@@ -15,6 +15,11 @@ def get_section_text(section) -> str:
 
 
 def get_weak_topics(limit: int = 3) -> list[str]:
+    # Prefer topics that are due for SRS review
+    due = db.get_due_topics(limit)
+    if due:
+        return [row["topic"] for row in due]
+    # Fall back to low-rated topics with no review schedule yet
     profile = db.get_profile()
     weak = [row["topic"] for row in profile if row["rating"] <= 2]
     return weak[:limit]
