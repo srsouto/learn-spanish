@@ -66,33 +66,30 @@ def pick_proactive_action() -> dict:
     """
     Decide what to proactively send. Returns a dict:
       {"type": "text" | "image" | "quiz", "content": ..., "page": ...}
+
+    Priority:
+      1. SRS topics due for review → quiz targeting the most overdue topic
+      2. Section intro not yet sent → lesson intro
+      3. Otherwise → page image for passive reinforcement
     """
     section = db.get_current_section()
     if not section:
         return {"type": "text", "content": "Ready to start? Send /start to begin your Spanish journey!"}
 
-    last_action = db.get_state("last_proactive_action") or "quiz"
+    # Priority 1: send a quiz if any topics are due for review
+    due = db.get_due_topics(limit=1)
+    if due:
+        return {"type": "quiz", "content": build_quiz_question()}
 
-    # Rotate: intro → image → quiz → intro ...
-    if last_action == "quiz":
-        next_action = "intro"
-    elif last_action == "intro":
-        next_action = "image"
-    else:
-        next_action = "quiz"
-
-    db.set_state("last_proactive_action", next_action)
-
-    if next_action == "intro":
+    # Priority 2: send section intro if we haven't yet for this section
+    last_intro_section = db.get_state("last_intro_section_id")
+    if last_intro_section != str(section["id"]):
+        db.set_state("last_intro_section_id", str(section["id"]))
         return {"type": "text", "content": build_lesson_intro()}
 
-    elif next_action == "image":
-        # Pick a random page from the current section
-        page = random.randint(section["page_start"], section["page_end"])
-        return {"type": "image", "page": page}
-
-    else:
-        return {"type": "quiz", "content": build_quiz_question()}
+    # Priority 3: page image for passive reinforcement
+    page = random.randint(section["page_start"], section["page_end"])
+    return {"type": "image", "page": page}
 
 
 def handle_user_message(user_text: str) -> str:
