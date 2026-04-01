@@ -228,6 +228,7 @@ def main():
     # Proactive scheduler: 9am and 6pm Pacific, DST-aware
     pacific = ZoneInfo("America/Los_Angeles")
     app.job_queue.run_daily(proactive_job, time(9, 0, tzinfo=pacific))
+    app.job_queue.run_daily(proactive_job, time(16, 30, tzinfo=pacific))  # temp test slot — remove after verifying
     app.job_queue.run_daily(proactive_job, time(18, 0, tzinfo=pacific))
 
     app.add_handler(CommandHandler("start", cmd_start))
