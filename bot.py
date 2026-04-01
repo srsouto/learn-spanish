@@ -9,6 +9,8 @@ import os
 import asyncio
 import logging
 import urllib.request
+from datetime import time
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -192,6 +194,29 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     loop.run_in_executor(None, lm.update_profile_from_history)
 
 
+# --- Proactive Job ---
+
+async def proactive_job(context: ContextTypes.DEFAULT_TYPE):
+    """Scheduled job: send a proactive lesson, quiz, or image if appropriate."""
+    action = lm.pick_proactive_action()
+    if action["type"] == "skip":
+        log.info("Proactive job: skipping (snoozed or last message unacknowledged)")
+        return
+    if action["type"] == "image":
+        page = action["page"]
+        log.info(f"Proactive job: sending page image {page}")
+        image_bytes = pdf_reader.render_page_as_image(page)
+        await context.bot.send_photo(
+            chat_id=ALLOWED_CHAT_ID,
+            photo=image_bytes,
+            caption=f"Here's page {page} from your textbook. Want to discuss it or get quizzed?",
+        )
+    else:
+        log.info(f"Proactive job: sending {action['type']}")
+        await context.bot.send_message(chat_id=ALLOWED_CHAT_ID, text=action["content"])
+    db.record_proactive_sent()
+
+
 # --- Main ---
 
 def main():
@@ -199,6 +224,11 @@ def main():
     db.init_db()
     ensure_sections()
     app = ApplicationBuilder().token(TOKEN).build()
+
+    # Proactive scheduler: 9am and 6pm Pacific, DST-aware
+    pacific = ZoneInfo("America/Los_Angeles")
+    app.job_queue.run_daily(proactive_job, time(9, 0, tzinfo=pacific))
+    app.job_queue.run_daily(proactive_job, time(18, 0, tzinfo=pacific))
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("next", cmd_next))

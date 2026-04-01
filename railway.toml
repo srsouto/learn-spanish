@@ -1,15 +1,6 @@
 [build]
 builder = "dockerfile"
 
-# Bot service (always-on, defined via Railway dashboard as the primary service)
-# Start command: python bot.py
-
-# Cron service (separate Railway service using the same image)
-# In Railway dashboard:
-#   1. Add service → select this repo
-#   2. Set start command: python scheduler.py
-#   3. Set service type: Cron
-#   4. Schedule: 0 9,18 * * *   (9am and 6pm daily, UTC)
-#   5. Attach the same /data volume as the bot service
-#   6. Add the same environment variables (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-#      ANTHROPIC_API_KEY, PDF_PATH, DB_PATH, PDF_ASSET_URL, GITHUB_TOKEN)
+# Single service: python bot.py
+# The proactive scheduler (9am + 6pm Pacific) runs as a JobQueue inside the bot process.
+# No separate cron service needed — no volume sharing required.
