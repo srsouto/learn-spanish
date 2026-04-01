@@ -114,10 +114,12 @@ def handle_user_message(user_text: str) -> str:
 def update_profile_from_history():
     """Assess the latest exchange and update student profile. Designed to run in a background thread."""
     history = db.get_history()
+    section = db.get_current_section()
+    section_id = section["id"] if section else None
     assessments = llm.assess_performance(history)
     for a in assessments:
         if isinstance(a, dict) and "topic" in a and "rating" in a:
-            db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""))
+            db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""), section_id=section_id)
 
 
 def progress_summary() -> str:

@@ -1,6 +1,7 @@
 """
 SQLite database for tracking progress, student profile, and conversation history.
 """
+import math
 import sqlite3
 import os
 from datetime import datetime
@@ -40,6 +41,15 @@ def init_db():
                 last_updated TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS profile_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                notes TEXT,
+                section_id INTEGER,
+                timestamp TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS conversation_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role TEXT NOT NULL,
@@ -52,6 +62,50 @@ def init_db():
                 value TEXT NOT NULL
             );
         """)
+    _maybe_seed_profile_events()
+
+
+def _maybe_seed_profile_events():
+    """One-time migration: seed profile_events from existing student_profile rows."""
+    with get_connection() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM profile_events").fetchone()[0]
+        if count > 0:
+            return
+        existing = conn.execute(
+            "SELECT topic, rating, notes, last_updated FROM student_profile"
+        ).fetchall()
+        for row in existing:
+            conn.execute(
+                "INSERT INTO profile_events (topic, rating, notes, section_id, timestamp) "
+                "VALUES (?, ?, ?, NULL, ?)",
+                (row["topic"], row["rating"], row["notes"] or "", row["last_updated"])
+            )
+
+
+_RATING_HALF_LIFE_DAYS = 21.0
+
+
+def _recompute_topic_rating(conn, topic: str) -> tuple[int, str]:
+    """Recency-weighted average rating from event history. Half-life = 21 days."""
+    events = conn.execute(
+        "SELECT rating, notes, timestamp FROM profile_events "
+        "WHERE topic = ? ORDER BY timestamp DESC",
+        (topic,)
+    ).fetchall()
+    if not events:
+        return 3, ""
+    now = datetime.utcnow()
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for event in events:
+        ts = datetime.fromisoformat(event["timestamp"])
+        days_ago = (now - ts).total_seconds() / 86400
+        weight = math.exp(-days_ago * math.log(2) / _RATING_HALF_LIFE_DAYS)
+        weighted_sum += event["rating"] * weight
+        total_weight += weight
+    computed = round(weighted_sum / total_weight) if total_weight > 0 else 3
+    latest_notes = events[0]["notes"] or ""
+    return computed, latest_notes
 
 
 # --- Sections ---
@@ -107,8 +161,15 @@ def get_all_sections():
 
 # --- Student Profile ---
 
-def update_topic(topic: str, rating: int, notes: str = ""):
+def update_topic(topic: str, rating: int, notes: str = "", section_id: int = None):
+    now = datetime.utcnow().isoformat()
     with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO profile_events (topic, rating, notes, section_id, timestamp) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (topic, rating, notes or "", section_id, now)
+        )
+        computed_rating, latest_notes = _recompute_topic_rating(conn, topic)
         conn.execute("""
             INSERT INTO student_profile (topic, rating, notes, last_updated)
             VALUES (?, ?, ?, ?)
@@ -116,7 +177,18 @@ def update_topic(topic: str, rating: int, notes: str = ""):
                 rating = excluded.rating,
                 notes = excluded.notes,
                 last_updated = excluded.last_updated
-        """, (topic, rating, notes, datetime.utcnow().isoformat()))
+        """, (topic, computed_rating, notes or latest_notes, now))
+
+
+def get_topic_history(topic: str) -> list[dict]:
+    """Return all assessment events for a topic, newest first."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT rating, notes, section_id, timestamp FROM profile_events "
+            "WHERE topic = ? ORDER BY timestamp DESC",
+            (topic,)
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def get_profile():
