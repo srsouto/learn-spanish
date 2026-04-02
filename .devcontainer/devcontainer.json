@@ -1,0 +1,19 @@
+{
+  "name": "learn-spanish",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
+  },
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y poppler-utils",
+  "postCreateCommand": "pip install -r requirements.txt && npm install -g @anthropic-ai/claude-code",
+  "remoteEnv": {
+    "DB_PATH": "/workspaces/learn-spanish/data/progress.db",
+    "PDF_PATH": "/workspaces/learn-spanish/data/Complete-Spanish-Step-By-Step-Book.pdf",
+    "BOOK_INDEX_PATH": "/workspaces/learn-spanish/book_index.md"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}
