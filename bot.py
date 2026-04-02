@@ -171,9 +171,15 @@ async def cmd_more(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
     db.advance_section_page(section["id"], lm.PAGES_PER_WINDOW)
+    new_offset = db.get_section_page_offset(section["id"])
     page_start, _ = lm.current_page_window(section)
+    db.mark_window_taught(section["id"], new_offset)
     image_bytes = pdf_reader.render_page_as_image(page_start)
-    await update.message.reply_photo(photo=image_bytes, caption=f"Page {page_start}")
+    if lm.page_is_continuation(section, new_offset):
+        caption = f"Page {page_start} — this continues the exercise from the previous page."
+    else:
+        caption = f"Page {page_start}"
+    await update.message.reply_photo(photo=image_bytes, caption=caption)
 
 
 async def cmd_skip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -251,10 +257,14 @@ async def proactive_job(context: ContextTypes.DEFAULT_TYPE):
         page = action["page"]
         log.info(f"Proactive job: sending page image {page}")
         image_bytes = pdf_reader.render_page_as_image(page)
+        if action.get("continuation"):
+            caption = f"Page {page} — this continues the exercise from the previous page."
+        else:
+            caption = f"Page {page}"
         await context.bot.send_photo(
             chat_id=ALLOWED_CHAT_ID,
             photo=image_bytes,
-            caption=f"Here's page {page} from your textbook. Want to discuss it or get quizzed?",
+            caption=caption,
         )
     else:
         log.info(f"Proactive job: sending {action['type']}")

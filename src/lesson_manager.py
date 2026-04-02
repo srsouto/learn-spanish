@@ -1,6 +1,7 @@
 """
 Orchestrates what to teach next and generates lesson/quiz content.
 """
+import re
 import random
 from . import progress_db as db
 from . import pdf_reader
@@ -89,6 +90,43 @@ def page_has_exercise(section, offset: int) -> bool:
     return any(kw in text for kw in _EXERCISE_KEYWORDS)
 
 
+def page_is_continuation(section, offset: int) -> bool:
+    """
+    True if the current page continues an exercise that started on the previous page.
+    Detected by: previous page had an exercise AND current page opens with numbered
+    items before any new Exercise heading.
+    """
+    if offset == 0:
+        return False
+    prev_start = section["page_start"] + offset - 1
+    prev_text = pdf_reader.extract_text(prev_start, prev_start).lower()
+    if not any(kw in prev_text for kw in _EXERCISE_KEYWORDS):
+        return False
+    curr_text = get_section_text(section)
+    exercise_pos = curr_text.lower().find("exercise")
+    first_item = re.search(r'^\s*\d+\.', curr_text, re.MULTILINE)
+    if first_item:
+        return exercise_pos == -1 or first_item.start() < exercise_pos
+    return False
+
+
+def get_section_text_with_context(section) -> str:
+    """
+    Return the current page text. If this page continues an exercise from the
+    previous page, prepend that page so Claude has the exercise instructions.
+    """
+    offset = db.get_section_page_offset(section["id"])
+    text = get_section_text(section)
+    if page_is_continuation(section, offset):
+        prev_start = section["page_start"] + offset - 1
+        prev_text = pdf_reader.extract_text(prev_start, prev_start)
+        text = (
+            "[Previous page — exercise instructions:]\n" + prev_text +
+            "\n\n[Current page — continuation of that exercise:]\n" + text
+        )
+    return text
+
+
 def get_lesson_step() -> str:
     """
     Return the current step in the page→quiz→chat cycle:
@@ -112,7 +150,7 @@ def build_quiz_question() -> str:
     section = db.get_current_section()
     if not section:
         return "No active section. Use /start to begin!"
-    text = get_section_text(section)
+    text = get_section_text_with_context(section)
     weak = get_weak_topics()
     answer_key = get_answer_key_text(section)
     offset = db.get_section_page_offset(section["id"])
@@ -173,7 +211,11 @@ def pick_proactive_action() -> dict:
     current_page = section["page_start"] + offset
     if not db.is_window_taught(section["id"], offset):
         db.mark_window_taught(section["id"], offset)
-        return {"type": "image", "page": current_page}
+        return {
+            "type": "image",
+            "page": current_page,
+            "continuation": page_is_continuation(section, offset),
+        }
 
     # Priority 4: SRS review quiz if topics are due
     due = db.get_due_topics(limit=1)
@@ -240,7 +282,7 @@ def handle_user_message(user_text: str) -> str:
             return missed
 
     section = db.get_current_section()
-    section_context = get_section_text(section) if section else ""
+    section_context = get_section_text_with_context(section) if section else ""
     profile_context = build_profile_context()
     long_term_context = db.get_long_term_context()
     answer_key_context = get_answer_key_text(section) if section else ""
