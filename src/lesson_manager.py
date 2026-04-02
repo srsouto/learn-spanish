@@ -113,7 +113,20 @@ def pick_proactive_action() -> dict:
     if not section:
         return {"type": "text", "content": "Ready to start? Send /start to begin your Spanish journey!"}
 
-    # Priority 1: send a quiz if any topics are due for review
+    # Priority 1: retry a previously missed question (every 3rd proactive send)
+    send_count = int(db.get_state("proactive_send_count") or "0")
+    if send_count % 3 == 2:
+        missed = db.get_due_missed_question()
+        if missed:
+            db.record_missed_question_retry(missed["id"])
+            db.set_state("pending_retry_id", str(missed["id"]))
+            return {
+                "type": "retry",
+                "content": f"Let's try this one again:\n\n{missed['question']}",
+                "missed_id": missed["id"],
+            }
+
+    # Priority 2: send a quiz if any topics are due for review
     due = db.get_due_topics(limit=1)
     if due:
         return {"type": "quiz", "content": build_quiz_question()}
@@ -127,6 +140,30 @@ def pick_proactive_action() -> dict:
     # Priority 3: page image for passive reinforcement
     page = random.randint(section["page_start"], section["page_end"])
     return {"type": "image", "page": page}
+
+
+def _check_retry_answer(question_id: int, user_text: str) -> str | None:
+    """
+    Check if user_text correctly answers a pending missed question.
+    Resolves it if correct. Returns a response string, or None to fall through to normal chat.
+    """
+    with db.get_connection() as conn:
+        row = conn.execute(
+            "SELECT question, correct_answer FROM missed_questions WHERE id = ?", (question_id,)
+        ).fetchone()
+    if not row:
+        return None
+
+    verdict = llm.check_retry_answer(row["question"], row["correct_answer"], user_text)
+    if verdict.get("correct"):
+        db.resolve_missed_question(question_id)
+        pending = db.get_pending_missed_count()
+        praise = verdict.get("feedback", "Correct!")
+        suffix = f" {pending} question{'s' if pending != 1 else ''} still to retry." if pending else " All caught up!"
+        return f"{praise}{suffix}"
+    else:
+        feedback = verdict.get("feedback", f"Not quite — the correct answer is: {row['correct_answer']}")
+        return feedback
 
 
 def summarize_and_clear_history():
@@ -152,6 +189,14 @@ def handle_user_message(user_text: str) -> str:
         db.set_snooze(hours=2.0)
         return "No problem! I'll leave you alone for a couple of hours. Send me a message whenever you're ready."
 
+    # If there's a pending retry question, check whether this message answers it correctly
+    pending_retry_id = db.get_state("pending_retry_id")
+    if pending_retry_id:
+        db.set_state("pending_retry_id", "")
+        missed = _check_retry_answer(int(pending_retry_id), user_text)
+        if missed:
+            return missed
+
     section = db.get_current_section()
     section_context = get_section_text(section) if section else ""
     profile_context = build_profile_context()
@@ -176,6 +221,15 @@ def update_profile_from_history():
     for a in assessments:
         if isinstance(a, dict) and "topic" in a and "rating" in a:
             db.update_topic(a["topic"], int(a["rating"]), a.get("notes", ""), section_id=section_id, page_offset=page_offset)
+
+    # Save any questions the student got wrong
+    missed = llm.extract_missed_questions(history)
+    for m in missed:
+        if isinstance(m, dict) and "question" in m and "correct_answer" in m:
+            db.save_missed_question(
+                m["question"], m.get("student_answer", ""), m["correct_answer"],
+                section_id=section_id
+            )
 
     # Decide whether to advance the page window
     if section_id:

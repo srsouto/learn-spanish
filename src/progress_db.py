@@ -62,6 +62,18 @@ def init_db():
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS missed_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                student_answer TEXT NOT NULL,
+                correct_answer TEXT NOT NULL,
+                section_id INTEGER,
+                timestamp TEXT NOT NULL,
+                resolved INTEGER NOT NULL DEFAULT 0,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                last_retried_at TEXT
+            );
         """)
     _maybe_seed_profile_events()
     _maybe_add_srs_columns()
@@ -337,11 +349,56 @@ def set_state(key: str, value: str):
         """, (key, value))
 
 
+# --- Missed Questions ---
+
+def save_missed_question(question: str, student_answer: str, correct_answer: str, section_id: int = None):
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO missed_questions (question, student_answer, correct_answer, section_id, timestamp) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (question, student_answer, correct_answer, section_id, datetime.utcnow().isoformat())
+        )
+
+
+def get_due_missed_question() -> dict | None:
+    """Return the oldest unresolved missed question, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM missed_questions WHERE resolved = 0 "
+            "ORDER BY last_retried_at ASC NULLS FIRST, timestamp ASC LIMIT 1"
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def resolve_missed_question(question_id: int):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE missed_questions SET resolved = 1 WHERE id = ?", (question_id,)
+        )
+
+
+def record_missed_question_retry(question_id: int):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE missed_questions SET retry_count = retry_count + 1, last_retried_at = ? WHERE id = ?",
+            (datetime.utcnow().isoformat(), question_id)
+        )
+
+
+def get_pending_missed_count() -> int:
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM missed_questions WHERE resolved = 0"
+        ).fetchone()[0]
+
+
 # --- Proactive Message Scheduling ---
 
 def record_proactive_sent():
-    """Mark that a proactive message was just sent."""
+    """Mark that a proactive message was just sent and increment send counter."""
     set_state("last_proactive_sent_at", datetime.utcnow().isoformat())
+    count = int(get_state("proactive_send_count") or "0") + 1
+    set_state("proactive_send_count", str(count))
 
 
 def record_user_interaction():

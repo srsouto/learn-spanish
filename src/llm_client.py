@@ -155,6 +155,58 @@ def assess_performance(exchange: list[dict]) -> list[dict]:
         return []
 
 
+def check_retry_answer(question: str, correct_answer: str, student_answer: str) -> dict:
+    """
+    Check whether student_answer correctly answers question given correct_answer.
+    Returns {"correct": bool, "feedback": str}.
+    """
+    prompt = (
+        f"A student is retrying a Spanish question they previously got wrong.\n\n"
+        f"Question: {question}\n"
+        f"Correct answer: {correct_answer}\n"
+        f"Student's answer: {student_answer}\n\n"
+        f"Is the student's answer correct (or acceptably close)? "
+        f"Reply with JSON only: {{\"correct\": true/false, \"feedback\": \"brief encouraging feedback\"}}. "
+        f"If correct, praise them briefly. If wrong, give the correct answer clearly."
+    )
+    try:
+        response = _client.messages.create(
+            model=HAIKU,
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return json.loads(response.content[0].text)
+    except Exception:
+        return {"correct": False, "feedback": f"The correct answer is: {correct_answer}"}
+
+
+def extract_missed_questions(exchange: list[dict]) -> list[dict]:
+    """
+    Scan a conversation exchange for quiz questions the student answered incorrectly.
+    Returns list of {"question": str, "student_answer": str, "correct_answer": str}.
+    Returns [] if no wrong answers found.
+    """
+    prompt = (
+        "Review this Spanish tutoring exchange. Identify any quiz questions the student "
+        "answered *incorrectly*. For each, extract the question asked, what the student "
+        "answered, and the correct answer.\n"
+        "Return a JSON array only — no other text. "
+        "Each item: {\"question\": str, \"student_answer\": str, \"correct_answer\": str}. "
+        "If the student answered correctly or no quiz was attempted, return [].\n\n"
+        "Exchange:\n" + "\n".join(f"{m['role']}: {m['content']}" for m in exchange[-6:])
+    )
+    try:
+        response = _client.messages.create(
+            model=HAIKU,
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = json.loads(response.content[0].text)
+        return result if isinstance(result, list) else []
+    except Exception:
+        return []
+
+
 def generate_quiz_question(section_text: str, weak_topics: list[str] = None, answer_key: str = "") -> str:
     """Generate a single quiz question from the current section."""
     focus = ""
