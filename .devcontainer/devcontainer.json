@@ -4,7 +4,7 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
   },
-  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y poppler-utils",
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y poppler-utils && curl -sSf https://docs.dolthub.com/scripts/install_dolt.sh | sudo bash && curl -sL https://github.com/gastownhall/beads/releases/download/v0.63.3/beads_0.63.3_linux_amd64.tar.gz | tar -xz -C /tmp && sudo mv /tmp/bd /usr/local/bin/bd",
   "postCreateCommand": "pip install -r requirements.txt && npm install -g @anthropic-ai/claude-code",
   "remoteEnv": {
     "DB_PATH": "/workspaces/learn-spanish/data/progress.db",
