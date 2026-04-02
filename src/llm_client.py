@@ -44,10 +44,14 @@ _STEP_INSTRUCTIONS = {
     ),
     "quiz_pending": (
         "The student has just read the current page but hasn't been quizzed yet. "
-        "If the page contains a textbook exercise, present the exercise instructions exactly as written "
-        "and give the first question or item from it — do NOT invent your own questions. "
-        "If the page has no exercise, ask one question about the content. "
-        "Start your reply with this immediately, do not wait for them to ask."
+        "Choose the right mode based on what's on the page:\n"
+        "- Textbook exercise (fill-in-the-blank, translation, completion): present the instructions verbatim and give the first item.\n"
+        "- 'Answer aloud' oral exercise: present the first question and ask the student to type their answer.\n"
+        "- 'Key Vocabulary' page: pick one word/phrase and ask the student for its meaning (vocab drill).\n"
+        "- Reading comprehension 'Preguntas': ask the first comprehension question from the book.\n"
+        "- Conjugation table page: ask the student to give a specific conjugation form.\n"
+        "- Explanation-only page: ask one question about the grammar concept explained.\n"
+        "Do NOT invent questions if the page has a written exercise — use the real one. Start immediately."
     ),
     "free_chat": "",
 }
@@ -105,9 +109,10 @@ def chat(
 def generate_lesson_intro(section_title: str, section_text: str) -> str:
     """Generate a short, engaging intro message for a new section."""
     prompt = (
-        f"Write a short (3-4 sentence) friendly introduction for starting a new section "
-        f"called '{section_title}'. Mention what the student will learn and why it matters. "
-        f"Then give one interesting example from the material below.\n\n{section_text[:2000]}"
+        f"Write a short (4-5 sentence) friendly introduction for the chapter '{section_title}'. "
+        f"Summarise the main topics covered across the whole chapter (grammar concepts, vocabulary themes, "
+        f"exercises, reading passages) and why they matter. Give one concrete example from the material.\n\n"
+        f"{section_text[:6000]}"
     )
     response = _client.messages.create(
         model=HAIKU,
@@ -240,11 +245,15 @@ def generate_quiz_question(section_text: str, weak_topics: list[str] = None, ans
 
     prompt = (
         f"The student has just read this page from their Spanish textbook. "
-        f"If the page contains a textbook exercise (fill-in-the-blank, translation, questions to answer), "
-        f"present the exercise instructions exactly as written and give the first question or item from it. "
-        f"Do NOT invent your own questions — use what is on the page. "
-        f"If the page has no exercise (it's explanation or vocabulary), ask one question about the content. "
-        f"{focus}\n\n{section_text[:3000]}"
+        f"Choose the right mode based on what's on the page:\n"
+        f"- Textbook exercise (fill-in-the-blank, translation, completion): present the instructions verbatim and give the first item.\n"
+        f"- 'Answer aloud' oral exercise: present the first question and ask the student to type their answer.\n"
+        f"- 'Key Vocabulary' page: pick one word/phrase and ask the student for its meaning.\n"
+        f"- Reading comprehension 'Preguntas': ask the first comprehension question from the book.\n"
+        f"- Conjugation table: ask the student to give a specific conjugation form.\n"
+        f"- Explanation-only: ask one question about the grammar concept.\n"
+        f"Do NOT invent questions if the page has a written exercise. {focus}\n\n"
+        f"{section_text[:3000]}"
         f"{answer_key_note}"
     )
     response = _client.messages.create(

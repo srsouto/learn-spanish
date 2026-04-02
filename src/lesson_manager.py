@@ -68,12 +68,12 @@ def build_profile_context() -> str:
 
 
 def build_lesson_intro() -> str:
-    """Text message: intro to the current section."""
+    """Text message: intro to the current section, using the full chapter text."""
     section = db.get_current_section()
     if not section:
         return "You've completed all sections! Ask me to go back to any chapter you'd like to review."
-    text = get_section_text(section)
-    return llm.generate_lesson_intro(section["title"], text)
+    full_text = pdf_reader.extract_text(section["page_start"], section["page_end"])
+    return llm.generate_lesson_intro(section["title"], full_text)
 
 
 
@@ -82,12 +82,37 @@ _EXERCISE_KEYWORDS = [
     "translate the following", "fill in", "write the",
     "give the", "complete the", "answer the",
 ]
+_ORAL_KEYWORDS = ["aloud", "out loud"]
 
 
 def page_has_exercise(section, offset: int) -> bool:
-    """Return True if the current page appears to contain a textbook exercise."""
+    """Return True if the current page contains a written textbook exercise."""
     text = get_section_text(section).lower()
     return any(kw in text for kw in _EXERCISE_KEYWORDS)
+
+
+def page_has_oral_exercise(section, offset: int) -> bool:
+    """True if the exercise on this page is explicitly oral (answer aloud)."""
+    text = get_section_text(section).lower()
+    return any(kw in text for kw in _ORAL_KEYWORDS)
+
+
+def page_is_key_vocabulary(section) -> bool:
+    """True if this page is a structured Key Vocabulary page."""
+    text = get_section_text(section).lower()
+    return "key vocabulary" in text
+
+
+def page_is_reading_comprehension(section) -> bool:
+    """True if this page contains a Reading Comprehension passage."""
+    text = get_section_text(section).lower()
+    return "reading comprehension" in text
+
+
+def page_has_conjugation_table(section) -> bool:
+    """True if this page contains a conjugation table (yo/tú/él pattern)."""
+    text = get_section_text(section)
+    return bool(re.search(r'\byo\b.{1,50}\bnosotros\b', text, re.IGNORECASE | re.DOTALL))
 
 
 def page_is_continuation(section, offset: int) -> bool:
@@ -112,11 +137,13 @@ def page_is_continuation(section, offset: int) -> bool:
 
 def get_section_text_with_context(section) -> str:
     """
-    Return the current page text. If this page continues an exercise from the
-    previous page, prepend that page so Claude has the exercise instructions.
+    Return the current page text, prepending prior-page context when needed:
+    - Multi-page exercise continuations: prepend the page with the exercise instructions.
+    - Reading comprehension questions (Preguntas): prepend the passage page.
     """
     offset = db.get_section_page_offset(section["id"])
     text = get_section_text(section)
+
     if page_is_continuation(section, offset):
         prev_start = section["page_start"] + offset - 1
         prev_text = pdf_reader.extract_text(prev_start, prev_start)
@@ -124,6 +151,15 @@ def get_section_text_with_context(section) -> str:
             "[Previous page — exercise instructions:]\n" + prev_text +
             "\n\n[Current page — continuation of that exercise:]\n" + text
         )
+    elif offset > 0 and "preguntas" in text.lower():
+        prev_start = section["page_start"] + offset - 1
+        prev_text = pdf_reader.extract_text(prev_start, prev_start)
+        if "reading comprehension" in prev_text.lower():
+            text = (
+                "[Reading passage from previous page:]\n" + prev_text +
+                "\n\n[Current page — comprehension questions:]\n" + text
+            )
+
     return text
 
 

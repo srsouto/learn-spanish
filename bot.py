@@ -164,7 +164,8 @@ async def cmd_more(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "You're at the end of this chapter. Use /next to move on!"
         )
         return
-    if lm.page_has_exercise(section, offset) and not db.is_window_quizzed(section["id"], offset):
+    is_oral_only = lm.page_has_oral_exercise(section, offset) and not lm.page_has_exercise(section, offset)
+    if not is_oral_only and lm.page_has_exercise(section, offset) and not db.is_window_quizzed(section["id"], offset):
         await update.message.reply_text(
             "This page has an exercise — work through it first, then use /more to continue.\n"
             "Use /skip if you want to move on without completing it."
