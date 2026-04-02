@@ -457,6 +457,17 @@ def advance_section_page(section_id: int, window_size: int = 3) -> int:
     return new_offset
 
 
+def is_window_taught(section_id: int, page_offset: int) -> bool:
+    """True if the vocab/grammar lesson for this page window has already been sent."""
+    val = get_state(f"section_{section_id}_window_{page_offset}_taught")
+    return val == "1"
+
+
+def mark_window_taught(section_id: int, page_offset: int):
+    """Record that the vocab/grammar lesson for this page window has been sent."""
+    set_state(f"section_{section_id}_window_{page_offset}_taught", "1")
+
+
 def increment_window_interactions(section_id: int) -> int:
     """Increment assessed-interaction count for the current page window. Returns new count."""
     key = f"section_{section_id}_window_interactions"

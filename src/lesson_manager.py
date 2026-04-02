@@ -75,6 +75,18 @@ def build_lesson_intro() -> str:
     return llm.generate_lesson_intro(section["title"], text)
 
 
+def build_window_lesson() -> str:
+    """
+    Vocabulary and grammar lesson for the current page window.
+    Sent before any quiz on this window so the student sees all new words first.
+    """
+    section = db.get_current_section()
+    if not section:
+        return "No active section. Use /start to begin!"
+    text = get_section_text(section)
+    return llm.generate_window_lesson(section["title"], text)
+
+
 def build_quiz_question() -> str:
     """Generate a quiz question from the current section."""
     section = db.get_current_section()
@@ -100,9 +112,11 @@ def pick_proactive_action() -> dict:
 
     Priority:
       1. Snoozed or unacknowledged → skip
-      2. SRS topics due for review → quiz targeting the most overdue topic
-      3. Section intro not yet sent → lesson intro
-      4. Otherwise → page image for passive reinforcement
+      2. Missed question retry (every 3rd send)
+      3. Section intro (once per section)
+      4. Window vocab/grammar lesson (once per page window, always before quiz)
+      5. SRS review quiz if topics are overdue
+      6. Quiz on current window material
     """
     if db.is_snoozed():
         return {"type": "skip"}
@@ -126,20 +140,25 @@ def pick_proactive_action() -> dict:
                 "missed_id": missed["id"],
             }
 
-    # Priority 2: send a quiz if any topics are due for review
-    due = db.get_due_topics(limit=1)
-    if due:
-        return {"type": "quiz", "content": build_quiz_question()}
-
     # Priority 2: send section intro if we haven't yet for this section
     last_intro_section = db.get_state("last_intro_section_id")
     if last_intro_section != str(section["id"]):
         db.set_state("last_intro_section_id", str(section["id"]))
         return {"type": "text", "content": build_lesson_intro()}
 
-    # Priority 3: page image for passive reinforcement
-    page = random.randint(section["page_start"], section["page_end"])
-    return {"type": "image", "page": page}
+    # Priority 3: teach vocab/grammar for the current page window before any quiz
+    offset = db.get_section_page_offset(section["id"])
+    if not db.is_window_taught(section["id"], offset):
+        db.mark_window_taught(section["id"], offset)
+        return {"type": "text", "content": build_window_lesson()}
+
+    # Priority 4: SRS review quiz if topics are due
+    due = db.get_due_topics(limit=1)
+    if due:
+        return {"type": "quiz", "content": build_quiz_question()}
+
+    # Priority 5: quiz on current window material
+    return {"type": "quiz", "content": build_quiz_question()}
 
 
 def _check_retry_answer(question_id: int, user_text: str) -> str | None:
