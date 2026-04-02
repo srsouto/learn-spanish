@@ -282,7 +282,7 @@ def update_profile_from_history():
             exchange_count = db.increment_window_interactions(section_id)
             understood = comp["count"] > 0 and comp["avg_rating"] >= MIN_COMPREHENSION_RATING
             fallback = exchange_count >= FALLBACK_EXCHANGE_LIMIT
-            if understood or fallback:
+            if (understood or fallback) and db.is_window_quizzed(section_id, offset):
                 db.advance_section_page(section_id, PAGES_PER_WINDOW)
 
 
