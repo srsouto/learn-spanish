@@ -74,6 +74,17 @@ def init_db():
                 retry_count INTEGER NOT NULL DEFAULT 0,
                 last_retried_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS interaction_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                role TEXT NOT NULL,
+                message_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                section_id INTEGER,
+                page_num INTEGER,
+                lesson_step TEXT
+            );
         """)
     _maybe_seed_profile_events()
     _maybe_add_srs_columns()
@@ -485,3 +496,31 @@ def increment_window_interactions(section_id: int) -> int:
     count = int(get_state(key) or "0") + 1
     set_state(key, str(count))
     return count
+
+
+# --- Interaction Log ---
+
+def log_interaction(
+    role: str,
+    content: str,
+    message_type: str = "chat",
+    section_id: int = None,
+    page_num: int = None,
+    lesson_step: str = None,
+):
+    """
+    Permanently record a single interaction turn.
+
+    role:         'user' | 'assistant' | 'proactive'
+    message_type: 'chat' | 'quiz' | 'lesson' | 'image' | 'retry'
+    section_id:   current section at time of message
+    page_num:     actual PDF page number being studied
+    lesson_step:  'show_page' | 'quiz_pending' | 'free_chat'
+    """
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO interaction_log "
+            "(timestamp, role, message_type, content, section_id, page_num, lesson_step) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (datetime.utcnow().isoformat(), role, message_type, content, section_id, page_num, lesson_step),
+        )

@@ -329,6 +329,13 @@ def handle_user_message(user_text: str) -> str:
         offset = db.get_section_page_offset(section["id"])
         db.mark_window_quizzed(section["id"], offset)
 
+    section_id = section["id"] if section else None
+    offset = db.get_section_page_offset(section_id) if section_id else 0
+    page_num = section["page_start"] + offset if section else None
+
+    db.log_interaction("user", user_text, message_type="chat",
+                       section_id=section_id, page_num=page_num, lesson_step=step)
+
     db.add_message("user", user_text)
     history = db.get_history()
 
@@ -341,6 +348,10 @@ def handle_user_message(user_text: str) -> str:
         lesson_step=step,
     )
     db.add_message("assistant", reply)
+
+    msg_type = "quiz" if step == "quiz_pending" else "chat"
+    db.log_interaction("assistant", reply, message_type=msg_type,
+                       section_id=section_id, page_num=page_num, lesson_step=step)
     return reply
 
 

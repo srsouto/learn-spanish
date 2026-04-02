@@ -254,6 +254,11 @@ async def proactive_job(context: ContextTypes.DEFAULT_TYPE):
     if action["type"] == "skip":
         log.info("Proactive job: skipping (snoozed or last message unacknowledged)")
         return
+    section = db.get_current_section()
+    section_id = section["id"] if section else None
+    offset = db.get_section_page_offset(section_id) if section_id else 0
+    page_num = section["page_start"] + offset if section else None
+
     if action["type"] == "image":
         page = action["page"]
         log.info(f"Proactive job: sending page image {page}")
@@ -267,9 +272,13 @@ async def proactive_job(context: ContextTypes.DEFAULT_TYPE):
             photo=image_bytes,
             caption=caption,
         )
+        db.log_interaction("proactive", caption, message_type="image",
+                           section_id=section_id, page_num=page)
     else:
         log.info(f"Proactive job: sending {action['type']}")
         await context.bot.send_message(chat_id=ALLOWED_CHAT_ID, text=action["content"])
+        db.log_interaction("proactive", action["content"], message_type=action["type"],
+                           section_id=section_id, page_num=page_num)
     db.record_proactive_sent()
 
 
