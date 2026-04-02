@@ -76,14 +76,34 @@ def build_lesson_intro() -> str:
 
 
 
+def get_lesson_step() -> str:
+    """
+    Return the current step in the page→quiz→chat cycle:
+      'show_page'    — page not yet shown to the student
+      'quiz_pending' — page shown, no quiz given yet
+      'free_chat'    — quiz done, student can chat freely about the material
+    """
+    section = db.get_current_section()
+    if not section:
+        return "free_chat"
+    offset = db.get_section_page_offset(section["id"])
+    if not db.is_window_taught(section["id"], offset):
+        return "show_page"
+    if not db.is_window_quizzed(section["id"], offset):
+        return "quiz_pending"
+    return "free_chat"
+
+
 def build_quiz_question() -> str:
-    """Generate a quiz question from the current section."""
+    """Generate a quiz question from the current section and mark the window as quizzed."""
     section = db.get_current_section()
     if not section:
         return "No active section. Use /start to begin!"
     text = get_section_text(section)
     weak = get_weak_topics()
     answer_key = get_answer_key_text(section)
+    offset = db.get_section_page_offset(section["id"])
+    db.mark_window_quizzed(section["id"], offset)
     return llm.generate_quiz_question(text, weak, answer_key=answer_key)
 
 
@@ -211,11 +231,24 @@ def handle_user_message(user_text: str) -> str:
     profile_context = build_profile_context()
     long_term_context = db.get_long_term_context()
     answer_key_context = get_answer_key_text(section) if section else ""
+    step = get_lesson_step()
+
+    # If we're in quiz_pending during a chat, mark it quizzed — Claude will quiz them now
+    if step == "quiz_pending" and section:
+        offset = db.get_section_page_offset(section["id"])
+        db.mark_window_quizzed(section["id"], offset)
 
     db.add_message("user", user_text)
     history = db.get_history()
 
-    reply = llm.chat(history, section_context=section_context, profile_context=profile_context, long_term_context=long_term_context, answer_key_context=answer_key_context)
+    reply = llm.chat(
+        history,
+        section_context=section_context,
+        profile_context=profile_context,
+        long_term_context=long_term_context,
+        answer_key_context=answer_key_context,
+        lesson_step=step,
+    )
     db.add_message("assistant", reply)
     return reply
 

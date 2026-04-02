@@ -458,14 +458,25 @@ def advance_section_page(section_id: int, window_size: int = 3) -> int:
 
 
 def is_window_taught(section_id: int, page_offset: int) -> bool:
-    """True if the vocab/grammar lesson for this page window has already been sent."""
+    """True if the page for this window has already been sent to the student."""
     val = get_state(f"section_{section_id}_window_{page_offset}_taught")
     return val == "1"
 
 
 def mark_window_taught(section_id: int, page_offset: int):
-    """Record that the vocab/grammar lesson for this page window has been sent."""
+    """Record that the page for this window has been sent."""
     set_state(f"section_{section_id}_window_{page_offset}_taught", "1")
+
+
+def is_window_quizzed(section_id: int, page_offset: int) -> bool:
+    """True if a quiz has been given for this page window."""
+    val = get_state(f"section_{section_id}_window_{page_offset}_quizzed")
+    return val == "1"
+
+
+def mark_window_quizzed(section_id: int, page_offset: int):
+    """Record that a quiz has been given for this page window."""
+    set_state(f"section_{section_id}_window_{page_offset}_quizzed", "1")
 
 
 def increment_window_interactions(section_id: int) -> int:

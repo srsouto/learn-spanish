@@ -192,6 +192,20 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not auth(update):
         return
     user_text = update.message.text
+
+    # If the page hasn't been shown yet, send it automatically before responding
+    section = db.get_current_section()
+    if section:
+        offset = db.get_section_page_offset(section["id"])
+        if not db.is_window_taught(section["id"], offset):
+            page_num = section["page_start"] + offset
+            try:
+                image_bytes = pdf_reader.render_page_as_image(page_num)
+                await update.message.reply_photo(photo=image_bytes, caption=f"Page {page_num} — read this, then I'll quiz you!")
+                db.mark_window_taught(section["id"], offset)
+            except Exception as e:
+                log.warning("Couldn't send page image: %s", e)
+
     reply = lm.handle_user_message(user_text)
     await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
     loop = asyncio.get_event_loop()

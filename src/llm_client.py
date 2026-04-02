@@ -37,12 +37,27 @@ Formatting rules (Telegram Markdown):
 - Emojis: use sparingly and only when they add genuine clarity or warmth. Never use them as decoration or to pad out a message."""
 
 
+_STEP_INSTRUCTIONS = {
+    "show_page": (
+        "The student has NOT yet seen the current page. "
+        "Before anything else, tell them to use /page to see the current page, then come back."
+    ),
+    "quiz_pending": (
+        "The student has just read the current page but hasn't been quizzed yet. "
+        "Start your reply with a quiz question based on that page. "
+        "Do not wait for them to ask — quiz them now."
+    ),
+    "free_chat": "",
+}
+
+
 def chat(
     messages: list[dict],
     section_context: str = "",
     profile_context: str = "",
     long_term_context: str = "",
     answer_key_context: str = "",
+    lesson_step: str = "free_chat",
 ) -> str:
     """
     Send a conversation to Claude and return the assistant's reply.
@@ -52,6 +67,9 @@ def chat(
     profile_context: summary of student's known strengths and weaknesses
     """
     system = SYSTEM_PROMPT
+    step_instruction = _STEP_INSTRUCTIONS.get(lesson_step, "")
+    if step_instruction:
+        system += f"\n\nCurrent lesson step: {step_instruction}"
     if long_term_context:
         system += f"\n\nLearning history across previous sections (use this to personalise teaching and avoid repeating known struggles):\n{long_term_context}"
     if profile_context:
