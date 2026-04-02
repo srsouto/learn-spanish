@@ -164,10 +164,36 @@ async def cmd_more(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "You're at the end of this chapter. Use /next to move on!"
         )
         return
+    if lm.page_has_exercise(section, offset) and not db.is_window_quizzed(section["id"], offset):
+        await update.message.reply_text(
+            "This page has an exercise — work through it first, then use /more to continue.\n"
+            "Use /skip if you want to move on without completing it."
+        )
+        return
     db.advance_section_page(section["id"], lm.PAGES_PER_WINDOW)
     page_start, _ = lm.current_page_window(section)
     image_bytes = pdf_reader.render_page_as_image(page_start)
     await update.message.reply_photo(photo=image_bytes, caption=f"Page {page_start}")
+
+
+async def cmd_skip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Skip the current exercise and advance to the next page."""
+    if not auth(update):
+        return
+    section = db.get_current_section()
+    if not section:
+        await update.message.reply_text("No active section. Use /start to begin!")
+        return
+    offset = db.get_section_page_offset(section["id"])
+    section_span = section["page_end"] - section["page_start"]
+    db.mark_window_quizzed(section["id"], offset)
+    if offset + lm.PAGES_PER_WINDOW > section_span:
+        await update.message.reply_text("You're at the end of this chapter. Use /next to move on!")
+        return
+    db.advance_section_page(section["id"], lm.PAGES_PER_WINDOW)
+    page_start, _ = lm.current_page_window(section)
+    image_bytes = pdf_reader.render_page_as_image(page_start)
+    await update.message.reply_photo(photo=image_bytes, caption=f"Page {page_start} (exercise skipped)")
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -176,6 +202,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "/page — show the current page (get back on track)\n"
         "/more — advance to the next page\n"
+        "/skip — skip the current exercise and advance\n"
         "/quiz — get a quiz question on the current page\n"
         "/next — move to the next chapter\n"
         "/start — chapter intro\n"
@@ -252,6 +279,7 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("next", cmd_next))
     app.add_handler(CommandHandler("more", cmd_more))
+    app.add_handler(CommandHandler("skip", cmd_skip))
     app.add_handler(CommandHandler("quiz", cmd_quiz))
     app.add_handler(CommandHandler("progress", cmd_progress))
     app.add_handler(CommandHandler("page", cmd_page))
@@ -267,6 +295,7 @@ def main():
             ("more",     "Move to the next pages within this section"),
             ("progress", "View your progress and weak areas"),
             ("page",     "Show current page (or /page 42 for a specific one)"),
+            ("skip",     "Skip the current exercise and advance"),
             ("goto",     "Jump to a section — /goto 3"),
             ("help",     "Show all commands"),
         ])

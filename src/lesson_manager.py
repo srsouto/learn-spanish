@@ -76,6 +76,19 @@ def build_lesson_intro() -> str:
 
 
 
+_EXERCISE_KEYWORDS = [
+    "exercise", "ejercicio", "practice", "practise",
+    "translate the following", "fill in", "write the",
+    "give the", "complete the", "answer the",
+]
+
+
+def page_has_exercise(section, offset: int) -> bool:
+    """Return True if the current page appears to contain a textbook exercise."""
+    text = get_section_text(section).lower()
+    return any(kw in text for kw in _EXERCISE_KEYWORDS)
+
+
 def get_lesson_step() -> str:
     """
     Return the current step in the page→quiz→chat cycle:
@@ -282,8 +295,9 @@ def update_profile_from_history():
             exchange_count = db.increment_window_interactions(section_id)
             understood = comp["count"] > 0 and comp["avg_rating"] >= MIN_COMPREHENSION_RATING
             fallback = exchange_count >= FALLBACK_EXCHANGE_LIMIT
-            if (understood or fallback) and db.is_window_quizzed(section_id, offset):
-                db.advance_section_page(section_id, PAGES_PER_WINDOW)
+            if understood or fallback:
+                if not page_has_exercise(section, offset) or db.is_window_quizzed(section_id, offset):
+                    db.advance_section_page(section_id, PAGES_PER_WINDOW)
 
 
 def progress_summary() -> str:
