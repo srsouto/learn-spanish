@@ -33,7 +33,7 @@ def ensure_pdf():
     """Download the textbook PDF from GitHub Releases if it's not on the volume."""
     pdf_path = os.getenv("PDF_PATH", "data/progress.db")
     asset_url = os.getenv("PDF_ASSET_URL")
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = os.getenv("GH_PAT") or os.getenv("GITHUB_TOKEN")
 
     if os.path.exists(pdf_path):
         return
