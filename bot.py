@@ -110,15 +110,21 @@ async def cmd_progress(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Send a page image. Usage: /page 42"""
+    """Send a page image. Usage: /page [number] — omit number for the current page."""
     if not auth(update):
         return
     args = ctx.args
-    if not args or not args[0].isdigit():
-        await update.message.reply_text("Usage: /page <number>  e.g. /page 42")
-        return
-    page_num = int(args[0])
-    await update.message.reply_text(f"Fetching page {page_num}...")
+    if args and args[0].isdigit():
+        page_num = int(args[0])
+    else:
+        section = db.get_current_section()
+        if not section:
+            await update.message.reply_text("No active section. Use /start to begin!")
+            return
+        page_num, _ = lm.current_page_window(section)
+        # Reset taught state so the proactive loop re-sends the lesson before the next quiz
+        offset = db.get_section_page_offset(section["id"])
+        db.mark_window_taught(section["id"], offset)
     try:
         image_bytes = pdf_reader.render_page_as_image(page_num)
         await update.message.reply_photo(photo=image_bytes, caption=f"Page {page_num}")
@@ -144,7 +150,7 @@ async def cmd_goto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_more(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Advance the page window within the current section."""
+    """Advance to the next page within the current section."""
     if not auth(update):
         return
     section = db.get_current_section()
@@ -158,25 +164,23 @@ async def cmd_more(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "You're at the end of this chapter. Use /next to move on!"
         )
         return
-    new_offset = db.advance_section_page(section["id"], lm.PAGES_PER_WINDOW)
-    page_start, page_end = lm.current_page_window(section)
-    intro = lm.build_lesson_intro()
-    await update.message.reply_text(
-        f"Moving to pages {page_start}–{page_end} of this chapter.\n\n{intro}",
-        parse_mode=ParseMode.MARKDOWN
-    )
+    db.advance_section_page(section["id"], lm.PAGES_PER_WINDOW)
+    page_start, _ = lm.current_page_window(section)
+    image_bytes = pdf_reader.render_page_as_image(page_start)
+    await update.message.reply_photo(photo=image_bytes, caption=f"Page {page_start}")
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not auth(update):
         return
     await update.message.reply_text(
-        "/start — intro to current section\n"
-        "/next — move to next section\n"
-        "/more — advance to the next pages within the current section\n"
-        "/quiz — get a quiz question\n"
+        "/page — show the current page (get back on track)\n"
+        "/more — advance to the next page\n"
+        "/quiz — get a quiz question on the current page\n"
+        "/next — move to the next chapter\n"
+        "/start — chapter intro\n"
         "/progress — see your progress and strengths/weaknesses\n"
-        "/page <n> — send a page image from the book\n"
+        "/page <n> — send a specific page number\n"
         "/goto <id> — jump to a section\n\n"
         "Or just send me any message to ask a question or answer a quiz!"
     )
@@ -248,7 +252,7 @@ def main():
             ("next",     "Advance to the next section"),
             ("more",     "Move to the next pages within this section"),
             ("progress", "View your progress and weak areas"),
-            ("page",     "Send a page image — /page 42"),
+            ("page",     "Show current page (or /page 42 for a specific one)"),
             ("goto",     "Jump to a section — /goto 3"),
             ("help",     "Show all commands"),
         ])
