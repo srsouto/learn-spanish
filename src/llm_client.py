@@ -44,8 +44,10 @@ _STEP_INSTRUCTIONS = {
     ),
     "quiz_pending": (
         "The student has just read the current page but hasn't been quizzed yet. "
-        "Start your reply with a quiz question based on that page. "
-        "Do not wait for them to ask — quiz them now."
+        "If the page contains a textbook exercise, present the exercise instructions exactly as written "
+        "and give the first question or item from it — do NOT invent your own questions. "
+        "If the page has no exercise, ask one question about the content. "
+        "Start your reply with this immediately, do not wait for them to ask."
     ),
     "free_chat": "",
 }
@@ -238,13 +240,16 @@ def generate_quiz_question(section_text: str, weak_topics: list[str] = None, ans
 
     prompt = (
         f"The student has just read this page from their Spanish textbook. "
-        f"Generate one quiz question based *only* on what appears on this page. {focus} "
-        f"Ask it naturally, as if in conversation. Do not include the answer.\n\n{section_text[:3000]}"
+        f"If the page contains a textbook exercise (fill-in-the-blank, translation, questions to answer), "
+        f"present the exercise instructions exactly as written and give the first question or item from it. "
+        f"Do NOT invent your own questions — use what is on the page. "
+        f"If the page has no exercise (it's explanation or vocabulary), ask one question about the content. "
+        f"{focus}\n\n{section_text[:3000]}"
         f"{answer_key_note}"
     )
     response = _client.messages.create(
         model=HAIKU,
-        max_tokens=200,
+        max_tokens=400,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
