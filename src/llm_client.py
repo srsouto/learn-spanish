@@ -207,31 +207,6 @@ def extract_missed_questions(exchange: list[dict]) -> list[dict]:
         return []
 
 
-def generate_window_lesson(section_title: str, section_text: str) -> str:
-    """
-    Generate a vocabulary and grammar lesson for the current page window.
-    This is sent *before* any quiz on this material so the student sees all
-    new words and rules first.
-    """
-    prompt = (
-        f"You are teaching a page from '{section_title}' in 'Complete Spanish Step-by-Step'. "
-        f"The student is about to be quizzed on this material, so first teach them everything they need.\n\n"
-        f"From the text below, present:\n"
-        f"1. *New vocabulary* — list each Spanish word/phrase with its English meaning\n"
-        f"2. *Key grammar rules* — explain any new patterns or rules introduced\n"
-        f"3. One or two short example sentences showing the grammar in use\n\n"
-        f"Be complete but concise. The student must not encounter any word in a quiz that you haven't shown here. "
-        f"Use Telegram Markdown (*bold* for Spanish words and key terms).\n\n"
-        f"{section_text[:3000]}"
-    )
-    response = _client.messages.create(
-        model=SONNET,
-        max_tokens=600,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
-
 
 def generate_quiz_question(section_text: str, weak_topics: list[str] = None, answer_key: str = "") -> str:
     """Generate a single quiz question from the current section."""
@@ -244,7 +219,8 @@ def generate_quiz_question(section_text: str, weak_topics: list[str] = None, ans
         answer_key_note = f"\n\nAnswer key for this section (use to pick questions with known correct answers):\n{answer_key[:1500]}"
 
     prompt = (
-        f"Generate one quiz question based on this textbook section. {focus} "
+        f"The student has just read this page from their Spanish textbook. "
+        f"Generate one quiz question based *only* on what appears on this page. {focus} "
         f"Ask it naturally, as if in conversation. Do not include the answer.\n\n{section_text[:3000]}"
         f"{answer_key_note}"
     )

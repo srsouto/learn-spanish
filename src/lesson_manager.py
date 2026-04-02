@@ -7,7 +7,7 @@ from . import pdf_reader
 from . import llm_client as llm
 
 
-PAGES_PER_WINDOW = 3
+PAGES_PER_WINDOW = 1
 MIN_COMPREHENSION_RATING = 3  # avg rating threshold to advance
 FALLBACK_EXCHANGE_LIMIT = 10  # advance anyway after this many exchanges if nothing assessed
 
@@ -75,17 +75,6 @@ def build_lesson_intro() -> str:
     return llm.generate_lesson_intro(section["title"], text)
 
 
-def build_window_lesson() -> str:
-    """
-    Vocabulary and grammar lesson for the current page window.
-    Sent before any quiz on this window so the student sees all new words first.
-    """
-    section = db.get_current_section()
-    if not section:
-        return "No active section. Use /start to begin!"
-    text = get_section_text(section)
-    return llm.generate_window_lesson(section["title"], text)
-
 
 def build_quiz_question() -> str:
     """Generate a quiz question from the current section."""
@@ -146,11 +135,12 @@ def pick_proactive_action() -> dict:
         db.set_state("last_intro_section_id", str(section["id"]))
         return {"type": "text", "content": build_lesson_intro()}
 
-    # Priority 3: teach vocab/grammar for the current page window before any quiz
+    # Priority 3: show the actual PDF page before quizzing on it
     offset = db.get_section_page_offset(section["id"])
+    current_page = section["page_start"] + offset
     if not db.is_window_taught(section["id"], offset):
         db.mark_window_taught(section["id"], offset)
-        return {"type": "text", "content": build_window_lesson()}
+        return {"type": "image", "page": current_page}
 
     # Priority 4: SRS review quiz if topics are due
     due = db.get_due_topics(limit=1)
